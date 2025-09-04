@@ -11,18 +11,43 @@ test_text = '''
     Once upon a time, in a warm and sunny place, there was a big pit. A little boy named Tom liked to play near the pit. One day, Tom lost his red ball. He was very sad.
 '''
 
-def get_pair_freqs(word_freqs:Dict[bytes, int]) -> Dict[Tuple[bytes, bytes], int]:
+def get_pair_freqs(word_freqs:Dict[Tuple[int], int]) -> Dict[Tuple[int, int], int]:
     '''
     Inputs:
-        word_freqs: dict[bytes, int] A dictionary mapping bytes (word bytes) to int (word frequency).
+        word_freqs: dict[Tuple[int], int] A dictionary mapping int (word ID) to int (word frequency).
     Returns:
-        pair_freqs: dict[tuple[bytes, bytes], int] A dictionary mapping tuples of bytes (word pair bytes) to int (pair frequency).
+        pair_freqs: dict[tuple[int, int], int] A dictionary mapping tuples of int (word pair ID) to int (pair frequency).
     '''
     pair_freqs = defaultdict(int)
     for word, freq in word_freqs.items():
         for pre, fol in zip(word[:-1], word[1:]):
             pair_freqs[(pre, fol)] += freq
+
     return pair_freqs
+
+def merge_word_freqs(word_freqs:Dict[Tuple[int], int], most_frequent_pair:Tuple[int, int], new_token_id:int) -> Dict[Tuple[int], int]:
+    '''
+    Inputs:
+        word_freqs: dict[Tuple[int], int] A dictionary mapping int (word ID) to int (word frequency).
+        most_frequent_pair: tuple[int, int] A tuple of int (word pair ID) to merge.
+        new_token_id: int The ID of the new token that will be created by merging the target pair.
+    Returns:
+        new_word_freqs: dict[Tuple[int], int] A dictionary mapping int (word ID) to int (word frequency) after merging.
+    '''
+    new_word_freqs = defaultdict(int)
+    for word, freq in word_freqs.items():
+        i = 0
+        new_key= []
+        while i < len(word):
+            if i < len(word) - 1 and word[i:i+2] == most_frequent_pair:
+                new_key.append(new_token_id)
+                i += 2
+            else:
+                new_key.append(word[i])
+                i += 1
+        new_word_freqs[tuple(new_key)] += freq
+
+    return new_word_freqs
 
 def train_bpe(input_path:str, vocab_size:int, special_tokens:List[str]):
     '''
@@ -38,10 +63,10 @@ def train_bpe(input_path:str, vocab_size:int, special_tokens:List[str]):
                 is a tuple of bytes (<token1>, <token2>), representing that <token1> was merged with
                 <token2>. The merges should be ordered by order of creation.
     '''
-    special_tokens = set(special_tokens)
     lst = len(special_tokens)
     if vocab_size < 256 + lst:
         raise ValueError(f"vocab_size must be at least 256 + {lst}")
+    special_tokens_set = set(special_tokens)
     vocab = {}
     merges = []
 
@@ -51,34 +76,55 @@ def train_bpe(input_path:str, vocab_size:int, special_tokens:List[str]):
     except FileNotFoundError:
         raise FileNotFoundError(f"Input file not found: {input_path}")
 
-    # 初始化前len(special_tokens)个特殊token+256个byte token
-    for i, st in enumerate(special_tokens):
-        vocab[i] = st.encode("utf-8")
+    # 1. 初始化前256个byte token
     for i in range(256):
-        vocab[i+lst] = bytes([i]) # 注意这里是[i]而不是i，这和bytes的定义有关。
+        vocab[i] = bytes([i]) # 注意这里是[i]而不是i，这和bytes的定义有关。
     
-    # 1. 将文本根据special_tokens分割为多个chunk
-    special_pattern = "|".join(re.escape(st) for st in special_tokens_list)
+    # 2. 将文本根据special_tokens分割为多个chunk
+    special_pattern = "|".join(re.escape(st) for st in special_tokens)
     text_chunks = re.split(f'({special_pattern})', text)
     # print(text_chunks)
 
-    # 2. 遍历text_chunks，根据PAT进行分词，并计算词频
+    # 3. 遍历text_chunks，根据PAT进行分词，并计算词频
     word_freqs = defaultdict(int)
     pre_tokenizer = re.compile(PAT)
     for i, chunk in enumerate(text_chunks):
-        if chunk in special_tokens: # 跳过特殊token
+        if chunk in special_tokens_set: # 跳过特殊token
             continue
         for match in pre_tokenizer.finditer(chunk):
-            word_freqs[match.group(0).encode("utf-8")] += 1
+            b = match.group(0).encode("utf-8")
+            word_freqs[tuple(b)] += 1 # 这里通过tuple方法将bytes转为ascii码；比如tuple(b'hello') -> (104, 101, 108, 108, 111)
 
-    # 构建训练BPE的循环
+    # 4. 构建训练BPE的循环
     num_merges = vocab_size - lst - 256
     for i in range(num_merges):
-        # 3. 遍历词频字典，然后计算出前后字母组合的频率
+        # 5. 遍历词频字典，然后计算出前后字母组合的频率
         pair_freqs = get_pair_freqs(word_freqs)
 
-        # 4. 找出出现次数最多的前后字母组合，以字典序大的优先
-        
+        # 6. 找出出现次数最多的前后字母组合，以字典序大的优先
+        most_frequent_pair = max(pair_freqs, key=lambda k:(pair_freqs[k], k)) # max(dict)返回最大的key值
+
+        # 7. 合并词频字典中出现次数最多的前后字母组合，并更新词频字典
+        new_token_id = 256 + i
+        word_freqs = merge_word_freqs(word_freqs, most_frequent_pair, new_token_id)
+
+        # 8. 更新vocab字典; vocab: dict[int, bytes]
+        token1_bytes = vocab[most_frequent_pair[0]]
+        token2_bytes = vocab[most_frequent_pair[1]]
+        vocab[new_token_id] = token1_bytes + token2_bytes
+
+        # 9. 更新merges列表; merges: list[tuple[bytes, bytes]]
+        merges.append((token1_bytes, token2_bytes))
+
+        # 打印详细信息
+        # print(f"Merge {i+1}/{num_merges}: {most_frequent_pair} -> {new_token_id} (Freq: {pair_freqs[most_frequent_pair]})")
+
+    # 10. 在vocab最后添加上special_tokens
+    for st in special_tokens:
+        token_id = len(vocab)
+        vocab[token_id] = st.encode("utf-8")
+
+    return vocab, merges
 
 
 if __name__ == '__main__':
@@ -106,6 +152,8 @@ if __name__ == '__main__':
     pre_tokenizer = re.compile(PAT)
     for match in pre_tokenizer.finditer(test_text):
         print(match.group(0))
+        print(match.group(0).encode('utf-8')) # 这里还是b...形式的bytes
+        print(tuple(match.group(0).encode('utf-8'))) # 通过tuple方法能将bytes转为ascii码；比如tuple(b'hello') -> (104, 101, 108, 108, 111)
     
     print("Starting OPTIMIZED BPE training...")
     
