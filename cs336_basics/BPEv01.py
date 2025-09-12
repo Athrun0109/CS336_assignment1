@@ -102,10 +102,12 @@ def train_bpe(input_path:str, vocab_size:int, special_tokens:List[str]):
         pair_freqs = get_pair_freqs(word_freqs)
 
         # 6. 找出出现次数最多的前后字母组合，以字典序大的优先
+        if not pair_freqs: # 此时词表已并无可并，退出循环防止后面max()报错
+            break
         most_frequent_pair = max(pair_freqs, key=lambda k:(pair_freqs[k], k)) # max(dict)返回最大的key值
 
         # 7. 合并词频字典中出现次数最多的前后字母组合，并更新词频字典
-        new_token_id = 256 + i
+        new_token_id = 256 + len(merges) # 比256 + i更稳妥
         word_freqs = merge_word_freqs(word_freqs, most_frequent_pair, new_token_id)
 
         # 8. 更新vocab字典; vocab: dict[int, bytes]
