@@ -9,6 +9,7 @@ import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
+from cs336_basics.linear_module import Linear
 
 def run_linear(
     d_in: int,
@@ -29,7 +30,21 @@ def run_linear(
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
 
-    raise NotImplementedError
+    # 1. Instantiate your Linear module using the provided dimensions.
+    # The test script provides d_in and d_out.
+    model = Linear(in_features=d_in, out_features=d_out)
+
+    # 2. Create a state dictionary. The key 'W' MUST match the name of the
+    # parameter in your Linear class (self.W = nn.Parameter(...)).
+    state_dict = {"W": weights}
+
+    # 3. Load the provided weights into your model instance.
+    model.load_state_dict(state_dict)
+
+    # 4. Perform the forward pass and return the result.
+    output = model(in_features)
+
+    return output
 
 
 def run_embedding(

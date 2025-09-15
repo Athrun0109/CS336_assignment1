@@ -48,3 +48,11 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+### Memo
+
+测试Linear代码使用以下命令
+
+```sh
+uv run pytest tests/test_model.py::test_linear -q
+```
+
