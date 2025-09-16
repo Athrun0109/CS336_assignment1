@@ -50,9 +50,16 @@ cd ..
 
 ### Memo
 
-测试Linear代码使用以下命令
+Windows系统下，测试代码使用以下命令
 
 ```sh
+# test Linear
 uv run pytest tests/test_model.py::test_linear -q
+
+# test Embedding
+uv run pytest tests/test_model.py::test_embedding -q
+
+# test RMSNorm
+uv run pytest tests/test_model.py::test_rmsnorm -q
 ```
 
