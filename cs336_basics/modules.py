@@ -82,7 +82,29 @@ class RMSNorm(nn.Module):
         ret = x * rms * self.gamma
 
         return ret.to(in_type)
+    
 
+class SwiGLU(nn.Module):
+    def __init__(self, d_model: int, d_ff: int = None, device=None, dtype=None):
+        super(SwiGLU, self).__init__()
+        if d_ff is None:
+            d_hidden = 8 / 3 * d_model
+            self.d_ff = (d_hidden + 63) // 64 * 64 # 确保d_ff近似d_hidden的同时又是64的倍数
+        else:
+            self.d_ff = d_ff
+        self.linear1 = Linear(d_model, self.d_ff, device=device, dtype=dtype)
+        self.linear2 = Linear(self.d_ff, d_model, device=device, dtype=dtype)
+        self.linear3 = Linear(d_model, self.d_ff, device=device, dtype=dtype)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_for_gate = self.linear1(x)
+        silu = x_for_gate * torch.sigmoid(x_for_gate)
+        content = self.linear3(x)
+        hidden_state = silu * content
+        output = self.linear2(hidden_state)
+
+        return output
+    
 
 if __name__ == '__main__':
     module = Linear(3, 4)

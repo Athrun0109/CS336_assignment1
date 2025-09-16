@@ -61,5 +61,8 @@ uv run pytest tests/test_model.py::test_embedding -q
 
 # test RMSNorm
 uv run pytest tests/test_model.py::test_rmsnorm -q
+
+# test SwiGLU
+uv run pytest tests/test_model.py::test_swiglu -q
 ```
 
