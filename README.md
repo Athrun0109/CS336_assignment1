@@ -67,5 +67,8 @@ uv run pytest tests/test_model.py::test_swiglu -q
 
 # test RoPE
 uv run pytest tests/test_model.py::test_rope -q
+
+# test softmax
+uv run pytest tests/test_nn_utils.py::test_softmax_matches_pytorch -q
 ```
 

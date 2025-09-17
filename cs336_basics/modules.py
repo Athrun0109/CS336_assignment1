@@ -130,7 +130,7 @@ class RotaryPositionalEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor)-> torch.Tensor:
         # x.shape = (batch_size, seq_len, d_k)
-        # 重要：按照最后一维现将x分成even和odd两部分
+        # 重要：按照最后一维现将x分成even和odd两部分！
         x_even, x_odd = x[..., 0::2], x[..., 1::2] # shape=(batch_size, seq_len, d_k//2)
         cos = self.cos_cache[token_positions] # shape=(d_k//2,)
         sin = self.sin_cache[token_positions] # shape=(d_k//2,)
@@ -146,8 +146,13 @@ class RotaryPositionalEmbedding(nn.Module):
         return embed
 
 
+def softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    x = x - x.max(dim=dim, keepdim=True)[0] # 减去最大值，确保数值稳定
+    x = torch.exp(x)
+    x = x / x.sum(dim=dim, keepdim=True)
+    return x
+
+
 if __name__ == '__main__':
-    module = Linear(3, 4)
-    x = torch.randn(2, 3)
-    y = module(x)
-    print(y.shape)
+    t = torch.randn(2, 3, 4)
+    softmax(t, dim=-1)
