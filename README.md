@@ -64,5 +64,8 @@ uv run pytest tests/test_model.py::test_rmsnorm -q
 
 # test SwiGLU
 uv run pytest tests/test_model.py::test_swiglu -q
+
+# test RoPE
+uv run pytest tests/test_model.py::test_rope -q
 ```
 

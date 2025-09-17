@@ -104,7 +104,47 @@ class SwiGLU(nn.Module):
         output = self.linear2(hidden_state)
 
         return output
-    
+
+
+class RotaryPositionalEmbedding(nn.Module):
+    def __init__(self, theta: float, d_k:int, max_seq_len:int, device=None) -> None:
+        '''
+            theta: float Θ value for the RoPE
+            d_k: int dimension of query and key vectors
+            max_seq_len: int Maximum sequence length that will be inputted
+            device: torch.device | None = None Device to store the buffer on
+        '''
+        super(RotaryPositionalEmbedding, self).__init__()
+        if d_k % 2 != 0:
+            raise ValueError("d_k must be even!")
+        # 构建旋转角矩阵，shape=(max_seq_len, d_k//2)
+        m = torch.arange(max_seq_len, device=device)
+        ks = torch.arange(0, d_k, 2, dtype=torch.float32, device=device)
+        n = 1.0 / torch.pow(theta, ks / d_k)
+        mn = torch.outer(m, n) # shape=(max_seq_len, d_k//2)
+        cos_cache = torch.cos(mn) # shape=(max_seq_len, d_k//2)
+        sin_cache = torch.sin(mn) # shape=(max_seq_len, d_k//2)
+        # 注册Buffer，不会被优化器（Optimizer）在反向传播过程中更新
+        self.register_buffer("cos_cache", cos_cache, persistent=False)
+        self.register_buffer("sin_cache", sin_cache, persistent=False)
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor)-> torch.Tensor:
+        # x.shape = (batch_size, seq_len, d_k)
+        # 重要：按照最后一维现将x分成even和odd两部分
+        x_even, x_odd = x[..., 0::2], x[..., 1::2] # shape=(batch_size, seq_len, d_k//2)
+        cos = self.cos_cache[token_positions] # shape=(d_k//2,)
+        sin = self.sin_cache[token_positions] # shape=(d_k//2,)
+        # a_ = cos * a - sin * b
+        y_even = cos * x_even - sin * x_odd # shape=(batch_size, seq_len, d_k//2)
+        # b_ = sin * a + cos * b
+        y_odd = sin * x_even + cos * x_odd # shape=(batch_size, seq_len, d_k//2)
+
+        embed = torch.empty_like(x)
+        embed[..., 0::2] = y_even
+        embed[..., 1::2] = y_odd
+
+        return embed
+
 
 if __name__ == '__main__':
     module = Linear(3, 4)
