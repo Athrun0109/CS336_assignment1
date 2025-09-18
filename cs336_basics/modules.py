@@ -153,6 +153,70 @@ def softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return x
 
 
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, d_k: int) -> None:
+        super(ScaledDotProductAttention, self).__init__()
+        self.scale = 1.0 / math.sqrt(d_k)
+
+    def forward(self, Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+        '''
+            Q: query tensor, shape=(batch_size, ..., seq_len, d_k)
+            K: key tensor, shape=(batch_size, ..., seq_len, d_k)    
+            V: value tensor, shape=(batch_size, ..., seq_len, d_v)
+            mask: mask tensor, shape=(seq_len, seq_len)
+            Returns: context tensor, shape=(batch_size, ..., seq_len, d_v)
+        '''
+        # 注意标准的Attention公式中，是Q @ K.T
+        QKt = einsum(Q, K, "... q_seq d, ... k_seq d -> ... q_seq k_seq") # shape=(batch_size, ..., seq_len, seq_len)
+        scores = QKt * self.scale # shape=(batch_size, ..., seq_len, seq_len)
+        if mask is not None:
+            scores.masked_fill_(~mask, float('-inf'))
+        attn = softmax(scores, dim=-1) # shape=(batch_size, ..., seq_len, seq_len)
+        output = einsum(attn, V, "... q_seq k_seq, ... k_seq d -> ... q_seq d") # shape = (batch_size, ..., seq_len, d_v)
+
+        return output
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model: int, num_heads: int, use_rope: bool = False, max_seq_len: int = None, theta: float = 10000.0, device=None, dtype=None):
+        super(MultiHeadAttention, self).__init__()
+        if d_model % num_heads != 0:
+            raise ValueError("d_model must be divisible by num_heads!")
+        self.d_model = d_model
+        self.num_heads = num_heads
+        d = d_model // num_heads
+        self.use_rope = use_rope
+        params = {'device': device, 'dtype': dtype}
+
+        if use_rope:
+            self.rope = RotaryPositionalEmbedding(theta, d, max_seq_len, device)
+        self.q_proj, self.k_proj, self.v_proj, self.o_proj = [Linear(d_model, d_model, **params)
+                                                              for _ in range(4)]
+        # 下面的mask用得是下三角矩阵！！！行0只能看到列0；行1只能看到列0和1...
+        mask = torch.tril(torch.ones(max_seq_len, max_seq_len, device=device, dtype=torch.bool))
+        self.register_buffer("mask", mask, persistent=False)
+        self.attn = ScaledDotProductAttention(d)
+
+    def forward(self, x: torch.Tensor, token_positions: int = None):
+        _, seq_len, _ = x.shape
+        # Q, K, V shape = (batch_size, seq_len, num_heads, d) -> (batch_size, num_heads, seq_len, d)
+        Q, K, V = [rearrange(proj(x), "b s (h d) -> b h s d", h=self.num_heads) for proj in \
+                   [self.q_proj, self.k_proj, self.v_proj]]
+        if self.use_rope:
+            Q = self.rope(Q, token_positions)
+            K = self.rope(K, token_positions)
+        mask = self.mask[:seq_len, :seq_len]
+        attn_output = self.attn(Q, K, V, mask) # shape = (batch_size, num_heads, seq_len, d)
+        output = self.o_proj(rearrange(attn_output, "b h s d -> b s (h d)")) # shape = (batch_size, ..., d_model)
+
+        return output
+
+
 if __name__ == '__main__':
-    t = torch.randn(2, 3, 4)
-    softmax(t, dim=-1)
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
+    x = torch.randn(2, 4, 16, device=device)
+    model = MultiHeadAttention(d_model=16, num_heads=4, use_rope=True, max_seq_len=4, theta=10000.0, device=device)
+    output = model(x, token_positions=1)
+    print(output.shape)
+    print('Done!')

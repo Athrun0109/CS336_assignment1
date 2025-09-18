@@ -70,5 +70,12 @@ uv run pytest tests/test_model.py::test_rope -q
 
 # test softmax
 uv run pytest tests/test_nn_utils.py::test_softmax_matches_pytorch -q
+
+# test attention module
+uv run pytest tests/test_model.py::test_4d_scaled_dot_product_attention -q
+
+# test multihead self attention
+uv run pytest tests/test_model.py::test_multihead_self_attention -q
+uv run pytest tests/test_model.py::test_multihead_self_attention_with_rope -q
 ```
 
