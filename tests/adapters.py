@@ -453,7 +453,6 @@ def run_transformer_lm(
     """
     device = in_indices.device
     dtype = torch.float32
-    # num_heads = 3
     model = TransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta, device=device, dtype=dtype)
     # 加载权重
     state_dict = {
@@ -461,12 +460,7 @@ def run_transformer_lm(
         'ln_final.gamma': weights.get('ln_final.weight'),
         'lm_head.W': weights.get('lm_head.weight'),
     }
-    print("++++++++++++++++++++++++++++++++++")
-    print('d_model:', d_model)
-    print('num_heads:', num_heads)
-    print(weights.keys())
-    print("++++++++++++++++++++++++++++++++++")
-    for i in range(3):
+    for i in range(num_layers):
         state_dict[f'layers.{i}.mha.q_proj.W'] = weights.get(f'layers.{i}.attn.q_proj.weight')
         state_dict[f'layers.{i}.mha.k_proj.W'] = weights.get(f'layers.{i}.attn.k_proj.weight')
         state_dict[f'layers.{i}.mha.v_proj.W'] = weights.get(f'layers.{i}.attn.v_proj.weight')

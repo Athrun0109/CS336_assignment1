@@ -291,8 +291,7 @@ class TransformerLM(nn.Module):
         for layer in self.layers:
             x = layer(x, token_positions)
         x = self.ln_final(x)
-        x = self.lm_head(x)
-        output = softmax(x, dim=-1)
+        output = self.lm_head(x)
 
         return output
 
