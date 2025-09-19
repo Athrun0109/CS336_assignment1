@@ -128,16 +128,37 @@ class RotaryPositionalEmbedding(nn.Module):
         self.register_buffer("cos_cache", cos_cache, persistent=False)
         self.register_buffer("sin_cache", sin_cache, persistent=False)
 
+    def _rectify_token_positions_shape(self, token_positions: torch.Tensor, x_ndim: int) -> torch.Tensor:
+        # 该函数的核心功能是补全token_positions不足的维度。
+        if token_positions.ndim == x_ndim - 1:
+            return token_positions
+        shapes = [1] * (x_ndim - 1 - token_positions.ndim) + [-1] * (token_positions.ndim)
+        token_positions = token_positions.view(*shapes)
+        return token_positions
+
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor)-> torch.Tensor:
-        # x.shape = (batch_size, seq_len, d_k)
+        '''
+            x.shape = (batch_size, seq_len, d_k)
+            token_positions.shape = (..., seq_len)
+        '''
         # 重要：按照最后一维现将x分成even和odd两部分！
-        x_even, x_odd = x[..., 0::2], x[..., 1::2] # shape=(batch_size, seq_len, d_k//2)
-        cos = self.cos_cache[token_positions] # shape=(d_k//2,)
-        sin = self.sin_cache[token_positions] # shape=(d_k//2,)
+        x_even, x_odd = x[..., 0::2], x[..., 1::2] # shape=(batch_size, ..., seq_len, d_k//2)
+        '''
+        关于A[B]这个索引方法的比喻说明：可以想象成A是货物仓库，A[0]是货物种类数量，货物编号从0~A.size(0)-1，A的其他维度都是该货物的属性，比如货物的长宽高。
+        B是一个B.shape形状的货架，比如B.shape=(2, 3)，可以当成2行3列的货架。B中的每个元素可以想象成货架每个格子有个标签，用来提示该格子应该放A中的哪个货物。
+        因此B中标签的取值范围应该为[0, A.size(0)-1]，不然就无法正确获取A中的货物。
+        A[B]就是一个取货摆放的过程。完成取货摆放后，货架形状还是(2, 3)与B保持一致，同时增加了货物自己的长宽高，即A.shape[1:]的参数。
+        最后完成的结果C=A[B]，其中C.shape = B.shape + A.shape[1:]
+        '''
+        # 这里加入token_positions的shape矫正函数
+        assert torch.max(token_positions) <= self.cos_cache.shape[0], 'IndexError, token_positions value exceeds max_seq_len'
+        token_positions = self._rectify_token_positions_shape(token_positions, x.ndim)
+        cos = self.cos_cache[token_positions] # shape=(..., d_k//2)
+        sin = self.sin_cache[token_positions] # shape=(..., d_k//2)
         # a_ = cos * a - sin * b
-        y_even = cos * x_even - sin * x_odd # shape=(batch_size, seq_len, d_k//2)
+        y_even = cos * x_even - sin * x_odd # shape=(batch_size, ..., seq_len, d_k//2)
         # b_ = sin * a + cos * b
-        y_odd = sin * x_even + cos * x_odd # shape=(batch_size, seq_len, d_k//2)
+        y_odd = sin * x_even + cos * x_odd # shape=(batch_size, ..., seq_len, d_k//2)
 
         embed = torch.empty_like(x)
         embed[..., 0::2] = y_even
@@ -197,8 +218,9 @@ class MultiHeadAttention(nn.Module):
         self.register_buffer("mask", mask, persistent=False)
         self.attn = ScaledDotProductAttention(d)
 
-    def forward(self, x: torch.Tensor, token_positions: int = None):
+    def forward(self, x: torch.Tensor, token_positions):
         _, seq_len, _ = x.shape
+        # 修改内容：token_positions不能为None，防止后面出现逻辑性错误难以排查
         # Q, K, V shape = (batch_size, seq_len, num_heads, d) -> (batch_size, num_heads, seq_len, d)
         Q, K, V = [rearrange(proj(x), "b s (h d) -> b h s d", h=self.num_heads) for proj in \
                    [self.q_proj, self.k_proj, self.v_proj]]
@@ -212,11 +234,41 @@ class MultiHeadAttention(nn.Module):
         return output
 
 
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, use_rope: bool = False, max_seq_len: int = None, theta: float = 10000.0, device=None, dtype=None):
+        super(TransformerBlock, self).__init__()
+        if d_model % num_heads != 0:
+            raise ValueError("d_model must be divisible by num_heads!")
+        self.d_model = d_model
+        self.num_heads = num_heads
+        params = {'device': device, 'dtype': dtype}
+        self.rmsnorm1 = RMSNorm(d_model, **params)
+        self.mha = MultiHeadAttention(d_model, num_heads, use_rope=True, max_seq_len=max_seq_len, theta=theta, **params)
+        self.rmsnorm2 = RMSNorm(d_model, **params)
+        self.ffn = SwiGLU(d_model, d_ff, **params)
+
+    def forward(self, in_features: torch.Tensor, token_positions: torch.Tensor = None):
+        # part1: x + MultiHeadSelfAttention(RMSNorm(x))
+        # token_positions这个参数非常重要！
+        x = self.rmsnorm1(in_features)
+        x = self.mha(x, token_positions)
+        x = x + in_features
+        residual = x
+
+        # part2: x + SwiGLU(RMSNorm(x))
+        x = self.rmsnorm2(x)
+        x = self.ffn(x)
+        output = x + residual
+
+        return output
+
+
 if __name__ == '__main__':
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
     x = torch.randn(2, 4, 16, device=device)
     model = MultiHeadAttention(d_model=16, num_heads=4, use_rope=True, max_seq_len=4, theta=10000.0, device=device)
-    output = model(x, token_positions=1)
+    token_positions = torch.arange(4).unsqueeze(0).to(device)
+    output = model(x, token_positions=token_positions)
     print(output.shape)
     print('Done!')

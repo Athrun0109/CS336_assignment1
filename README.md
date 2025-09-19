@@ -77,5 +77,8 @@ uv run pytest tests/test_model.py::test_4d_scaled_dot_product_attention -q
 # test multihead self attention
 uv run pytest tests/test_model.py::test_multihead_self_attention -q
 uv run pytest tests/test_model.py::test_multihead_self_attention_with_rope -q
+
+# test transformer block
+uv run pytest tests/test_model.py::test_transformer_block -q
 ```
 

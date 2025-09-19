@@ -11,7 +11,7 @@ from torch import Tensor
 
 from cs336_basics.modules import (
     Linear, Embedding, RMSNorm, SwiGLU, RotaryPositionalEmbedding, softmax, \
-        ScaledDotProductAttention, MultiHeadAttention
+        ScaledDotProductAttention, MultiHeadAttention, TransformerBlock
 )
 
 def run_linear(
@@ -348,7 +348,28 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    device = in_features.device
+    dtype = in_features.dtype
+    model = TransformerBlock(d_model, num_heads, d_ff, use_rope=True, max_seq_len=max_seq_len, theta=theta, device=device, dtype=dtype)
+    # 加载权重
+    state_dict = {
+        'rmsnorm1.gamma': weights.get('ln1.weight'),
+        'mha.q_proj.W': weights.get('attn.q_proj.weight'),
+        'mha.k_proj.W': weights.get('attn.k_proj.weight'),
+        'mha.v_proj.W': weights.get('attn.v_proj.weight'),
+        'mha.o_proj.W': weights.get('attn.output_proj.weight'),
+        'rmsnorm2.gamma': weights.get('ln2.weight'),
+        'ffn.linear1.W': weights.get('ffn.w1.weight'),
+        'ffn.linear2.W': weights.get('ffn.w2.weight'),
+        'ffn.linear3.W': weights.get('ffn.w3.weight'),
+    }
+    model.load_state_dict(state_dict)
+    # 难点：生成token_positions；MultiHeadAttention中，x的shape为(batch_size, num_heads, seq_len, d_model//2)
+    _, seq_len, _ = in_features.shape
+    token_positions = torch.arange(seq_len, device=device)  # token_positions主要用来告知RoPE中需要用到的seq_len长度
+    output = model(in_features, token_positions)
+
+    return output
 
 
 def run_transformer_lm(
