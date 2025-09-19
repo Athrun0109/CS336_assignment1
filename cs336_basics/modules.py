@@ -44,7 +44,7 @@ class Embedding(nn.Module):
     def __init__(self, num_embeddings, embedding_dim, device=None, dtype=None):
         '''
             num_embeddings: int Size of the vocabulary
-            embedding_dim: int Dimension of the embedding vectors, i.e., dmodel
+            embedding_dim: int Dimension of the embedding vectors, i.e., d_model
             device: torch.device | None = None Device to store the parameters on
             dtype: torch.dtype | None = None Data type of the parameters
             Embedding不涉及矩阵计算，类似查表；num_embeddings为行数，查找某行，返回embedding_dim维度的向量
@@ -203,7 +203,6 @@ class MultiHeadAttention(nn.Module):
         super(MultiHeadAttention, self).__init__()
         if d_model % num_heads != 0:
             raise ValueError("d_model must be divisible by num_heads!")
-        self.d_model = d_model
         self.num_heads = num_heads
         d = d_model // num_heads
         self.use_rope = use_rope
@@ -239,8 +238,6 @@ class TransformerBlock(nn.Module):
         super(TransformerBlock, self).__init__()
         if d_model % num_heads != 0:
             raise ValueError("d_model must be divisible by num_heads!")
-        self.d_model = d_model
-        self.num_heads = num_heads
         params = {'device': device, 'dtype': dtype}
         self.rmsnorm1 = RMSNorm(d_model, **params)
         self.mha = MultiHeadAttention(d_model, num_heads, use_rope=True, max_seq_len=max_seq_len, theta=theta, **params)
@@ -259,6 +256,43 @@ class TransformerBlock(nn.Module):
         x = self.rmsnorm2(x)
         x = self.ffn(x)
         output = x + residual
+
+        return output
+
+
+class TransformerLM(nn.Module):
+    def __init__(self,
+             vocab_size: int,
+             max_seq_len: int,
+             d_model: int,
+             num_layers: int,
+             num_heads: int,
+             d_ff: int,
+             rope_theta: float,
+             device,
+             dtype) -> None:
+        super(TransformerLM, self).__init__()
+        if d_model % num_heads != 0:
+            raise ValueError("d_model must be divisible by num_heads!")
+        params = {'device': device, 'dtype': dtype}
+        self.embedding = Embedding(vocab_size, d_model, **params)
+        self.layers = nn.ModuleList(
+            [TransformerBlock(d_model, num_heads, d_ff, use_rope=True, max_seq_len=max_seq_len, theta=rope_theta, **params) \
+                for _ in range(num_layers)])
+        self.ln_final = RMSNorm(d_model, **params)
+        # lm_head虽然叫output embedding，然而其实是个Linear层
+        self.lm_head = Linear(d_model, vocab_size, **params)
+
+    def forward(self, in_features: torch.Tensor):
+        _, seq_len = in_features.shape
+        device = in_features.device
+        token_positions = torch.arange(seq_len, device=device)
+        x = self.embedding(in_features)
+        for layer in self.layers:
+            x = layer(x, token_positions)
+        x = self.ln_final(x)
+        x = self.lm_head(x)
+        output = softmax(x, dim=-1)
 
         return output
 

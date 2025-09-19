@@ -11,7 +11,7 @@ from torch import Tensor
 
 from cs336_basics.modules import (
     Linear, Embedding, RMSNorm, SwiGLU, RotaryPositionalEmbedding, softmax, \
-        ScaledDotProductAttention, MultiHeadAttention, TransformerBlock
+        ScaledDotProductAttention, MultiHeadAttention, TransformerBlock, TransformerLM
 )
 
 def run_linear(
@@ -451,7 +451,35 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    device = in_indices.device
+    dtype = torch.float32
+    # num_heads = 3
+    model = TransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta, device=device, dtype=dtype)
+    # 加载权重
+    state_dict = {
+        'embedding.W': weights.get('token_embeddings.weight'),
+        'ln_final.gamma': weights.get('ln_final.weight'),
+        'lm_head.W': weights.get('lm_head.weight'),
+    }
+    print("++++++++++++++++++++++++++++++++++")
+    print('d_model:', d_model)
+    print('num_heads:', num_heads)
+    print(weights.keys())
+    print("++++++++++++++++++++++++++++++++++")
+    for i in range(3):
+        state_dict[f'layers.{i}.mha.q_proj.W'] = weights.get(f'layers.{i}.attn.q_proj.weight')
+        state_dict[f'layers.{i}.mha.k_proj.W'] = weights.get(f'layers.{i}.attn.k_proj.weight')
+        state_dict[f'layers.{i}.mha.v_proj.W'] = weights.get(f'layers.{i}.attn.v_proj.weight')
+        state_dict[f'layers.{i}.mha.o_proj.W'] = weights.get(f'layers.{i}.attn.output_proj.weight')
+        state_dict[f'layers.{i}.rmsnorm1.gamma'] = weights.get(f'layers.{i}.ln1.weight')
+        state_dict[f'layers.{i}.ffn.linear1.W'] = weights.get(f'layers.{i}.ffn.w1.weight')
+        state_dict[f'layers.{i}.ffn.linear2.W'] = weights.get(f'layers.{i}.ffn.w2.weight')
+        state_dict[f'layers.{i}.ffn.linear3.W'] = weights.get(f'layers.{i}.ffn.w3.weight')
+        state_dict[f'layers.{i}.rmsnorm2.gamma'] = weights.get(f'layers.{i}.ln2.weight')
+    model.load_state_dict(state_dict)
+    output = model(in_indices)
+
+    return output
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:

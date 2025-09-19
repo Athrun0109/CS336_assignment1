@@ -80,5 +80,8 @@ uv run pytest tests/test_model.py::test_multihead_self_attention_with_rope -q
 
 # test transformer block
 uv run pytest tests/test_model.py::test_transformer_block -q
+
+# test transformer lm
+uv run pytest tests/test_model.py::test_transformer_lm -q
 ```
 
