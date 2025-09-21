@@ -296,6 +296,15 @@ class TransformerLM(nn.Module):
         return output
 
 
+def cross_entropy_loss(inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    x = inputs - inputs.max(dim=-1, keepdim=True)[0]
+    # 根据targets从logits中取出对应位置的logit
+    o = torch.gather(x, dim=-1, index=targets.unsqueeze(dim=-1))
+    s = torch.logsumexp(x, dim=-1)
+    loss = (s - o).mean()
+    return loss
+
+
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')

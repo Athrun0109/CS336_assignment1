@@ -83,5 +83,8 @@ uv run pytest tests/test_model.py::test_transformer_block -q
 
 # test transformer lm
 uv run pytest tests/test_model.py::test_transformer_lm -q
+
+# test cross entropy
+uv run pytest tests/test_nn_utils.py::test_cross_entropy -q
 ```
 
