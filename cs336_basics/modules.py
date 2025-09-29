@@ -87,7 +87,7 @@ class RMSNorm(nn.Module):
 
 class SwiGLU(nn.Module):
     def __init__(self, d_model: int, d_ff: int = None, device=None, dtype=None):
-        super(SwiGLU, self).__init__()
+        super(GLU, self).__init__()
         if d_ff is None:
             d_hidden = 8 / 3 * d_model
             self.d_ff = (d_hidden + 63) // 64 * 64 # 确保d_ff近似d_hidden的同时又是64的倍数
@@ -119,9 +119,9 @@ class RotaryPositionalEmbedding(nn.Module):
         if d_k % 2 != 0:
             raise ValueError("d_k must be even!")
         # 构建旋转角矩阵，shape=(max_seq_len, d_k//2)
-        m = torch.arange(max_seq_len, device=device)
-        ks = torch.arange(0, d_k, 2, dtype=torch.float32, device=device)
-        n = 1.0 / torch.pow(theta, ks / d_k)
+        m = torch.arange(max_seq_len, device=device) # shape=(max_seq_len,)
+        ks = torch.arange(0, d_k, 2, dtype=torch.float32, device=device) # shape=(d_k//2,)
+        n = 1.0 / torch.pow(theta, ks / d_k) # shape=(d_k//2,)
         mn = torch.outer(m, n) # shape=(max_seq_len, d_k//2)
         cos_cache = torch.cos(mn) # shape=(max_seq_len, d_k//2)
         sin_cache = torch.sin(mn) # shape=(max_seq_len, d_k//2)
@@ -140,7 +140,7 @@ class RotaryPositionalEmbedding(nn.Module):
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor)-> torch.Tensor:
         '''
             x.shape = (batch_size, seq_len, d_k)
-            token_positions.shape = (..., seq_len)
+            token_positions.shape = (..., seq_len)；比如输入 x 的形状是 (1, 5, d_k)，token_positions 就会是 torch.tensor([[0, 1, 2, 3, 4]])，形状为 (1, 5)
         '''
         # 重要：按照最后一维现将x分成even和odd两部分！
         x_even, x_odd = x[..., 0::2], x[..., 1::2] # shape=(batch_size, ..., seq_len, d_k//2)
@@ -161,7 +161,7 @@ class RotaryPositionalEmbedding(nn.Module):
         # b_ = sin * a + cos * b
         y_odd = sin * x_even + cos * x_odd # shape=(batch_size, ..., seq_len, d_k//2)
 
-        embed = torch.empty_like(x)
+        embed = torch.empty_like(x) # shape=(batch_size, ..., seq_len, d_k)
         embed[..., 0::2] = y_even
         embed[..., 1::2] = y_odd
 
@@ -220,7 +220,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, x: torch.Tensor, token_positions):
         _, seq_len, _ = x.shape
-        # 修改内容：token_positions不能为None，防止后面出现逻辑性错误难以排查
+        # 修改内容：token_positions不能为默认为None，防止后面出现逻辑性错误难以排查
         # Q, K, V shape = (batch_size, seq_len, num_heads, d) -> (batch_size, num_heads, seq_len, d)
         Q, K, V = [rearrange(proj(x), "b s (h d) -> b h s d", h=self.num_heads) for proj in \
                    [self.q_proj, self.k_proj, self.v_proj]]
@@ -373,6 +373,17 @@ class AdamW(torch.optim.Optimizer):
                     p.data.add_(p.data, alpha=-lr * weight_decay)
 
         return loss
+
+
+def cosine_annealing(it: int, max_learning_rate: float, min_learning_rate: float, warmup_iters: int, cosine_cycle_iters: int) -> float:
+    if it < warmup_iters:
+        return it / warmup_iters * max_learning_rate
+    if it > cosine_cycle_iters: # 最后使用最小学习率
+        return min_learning_rate
+    gap = max_learning_rate - min_learning_rate
+    p = (it - warmup_iters) / (cosine_cycle_iters - warmup_iters)
+    temp = 0.5 * (1 + math.cos(p * math.pi)) * gap
+    return min_learning_rate + temp
 
 
 if __name__ == '__main__':

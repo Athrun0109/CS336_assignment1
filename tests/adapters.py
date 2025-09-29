@@ -12,7 +12,7 @@ from torch import Tensor
 from cs336_basics.modules import (
     Linear, Embedding, RMSNorm, SwiGLU, RotaryPositionalEmbedding, softmax, \
         ScaledDotProductAttention, MultiHeadAttention, TransformerBlock, TransformerLM, \
-        cross_entropy_loss, AdamW
+        cross_entropy_loss, AdamW, cosine_annealing
 )
 
 def run_linear(
@@ -593,7 +593,7 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return cosine_annealing(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(
