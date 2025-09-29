@@ -92,5 +92,8 @@ uv run pytest tests/test_optimizer.py::test_adamw -q
 
 # test cosine annealing scheduler
 uv run pytest tests/test_optimizer.py::test_get_lr_cosine_schedule -q
+
+# test gradient clipping
+uv run pytest tests/test_nn_utils.py::test_gradient_clipping -q
 ```
 

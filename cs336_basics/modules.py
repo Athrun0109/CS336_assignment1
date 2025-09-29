@@ -386,6 +386,22 @@ def cosine_annealing(it: int, max_learning_rate: float, min_learning_rate: float
     return min_learning_rate + temp
 
 
+def gradient_clipping(parameters, max_l2_norm: float, eps=1e-6) -> None:
+    # gradient_clipping有个坑点，计算的L2 norm是基于所有parameters的，即将parameters想象成一个多维向量，计算这个多维向量的L2 norm。
+    # 1. 注意param.grad可能为None，先过滤出grad非None的param
+    grads = [p.grad for p in parameters if p.grad is not None]
+    if len(grads) == 0:
+        return
+    # 2. 计算L2 norm
+    s = sum(grad.pow(2).sum() for grad in grads)
+    l2_norm = math.sqrt(s)
+    # 3. 缩放parameters
+    coef = max_l2_norm / (l2_norm + eps)
+    if coef < 1.0:
+        for grad in grads:
+            grad.data.mul_(coef)
+
+
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')

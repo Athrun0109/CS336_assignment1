@@ -12,7 +12,7 @@ from torch import Tensor
 from cs336_basics.modules import (
     Linear, Embedding, RMSNorm, SwiGLU, RotaryPositionalEmbedding, softmax, \
         ScaledDotProductAttention, MultiHeadAttention, TransformerBlock, TransformerLM, \
-        cross_entropy_loss, AdamW, cosine_annealing
+        cross_entropy_loss, AdamW, cosine_annealing, gradient_clipping
 )
 
 def run_linear(
@@ -558,7 +558,7 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    gradient_clipping(parameters, max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
@@ -583,7 +583,7 @@ def run_get_lr_cosine_schedule(
     Args:
         it (int): Iteration number to get learning rate for.
         max_learning_rate (float): alpha_max, the maximum learning rate for
-            cosine learning rate schedule (with warmup).
+            cosine learning rate schedule (with warmup).gradient_clipping
         min_learning_rate (float): alpha_min, the minimum / final learning rate for
             the cosine learning rate schedule (with warmup).
         warmup_iters (int): T_w, the number of iterations to linearly warm-up
