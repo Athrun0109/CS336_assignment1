@@ -95,5 +95,11 @@ uv run pytest tests/test_optimizer.py::test_get_lr_cosine_schedule -q
 
 # test gradient clipping
 uv run pytest tests/test_nn_utils.py::test_gradient_clipping -q
+
+# test get batch
+uv run pytest tests/test_data.py::test_get_batch -q
+
+# test checkpointing
+uv run pytest tests/test_serialization.py::test_checkpointing -q
 ```
 

@@ -1,6 +1,7 @@
 import math
-from typing import Optional, Callable
+from typing import Optional, Callable, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange, einsum
@@ -298,6 +299,9 @@ class TransformerLM(nn.Module):
 
 
 def cross_entropy_loss(inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """
+    下面s-o来自CE对数分子 - 分母形成的。
+    """
     x = inputs - inputs.max(dim=-1, keepdim=True)[0]
     # 根据targets从logits中取出对应位置的logit
     o = torch.gather(x, dim=-1, index=targets.unsqueeze(dim=-1))
@@ -375,7 +379,12 @@ class AdamW(torch.optim.Optimizer):
         return loss
 
 
-def cosine_annealing(it: int, max_learning_rate: float, min_learning_rate: float, warmup_iters: int, cosine_cycle_iters: int) -> float:
+def cosine_annealing(
+        it: int,
+        max_learning_rate: float,
+        min_learning_rate: float,
+        warmup_iters: int,
+        cosine_cycle_iters: int) -> float:
     if it < warmup_iters:
         return it / warmup_iters * max_learning_rate
     if it > cosine_cycle_iters: # 最后使用最小学习率
@@ -400,6 +409,50 @@ def gradient_clipping(parameters, max_l2_norm: float, eps=1e-6) -> None:
     if coef < 1.0:
         for grad in grads:
             grad.data.mul_(coef)
+
+
+def get_batch(
+        dataset: np.ndarray,
+        batch_size: int,
+        context_length: int,
+        device: str
+    )-> Tuple[torch.Tensor, torch.Tensor]:
+    # torch.random.randint以及np.random.randint都不会随机到上界high的值
+    init_idxs = np.random.randint(low=0, high=len(dataset) - context_length, size=(batch_size, )) # shape=(batch_size, )
+    inputs = [dataset[idx:idx+context_length] for idx in init_idxs]
+    targets = [dataset[idx+1:idx+context_length+1] for idx in init_idxs]
+    # 将list转为矩阵
+    inputs = np.stack(inputs, axis=0) # shape=(batch_size, context_length)
+    targets = np.stack(targets, axis=0) # shape=(batch_size, context_length)
+    # 转为tensor并移动到device上
+    inputs = torch.from_numpy(inputs).to(device)
+    targets = torch.from_numpy(targets).to(device)
+    return inputs, targets # shape=(batch_size, context_length)
+
+
+def save_checkpoint(
+    model: nn.Module,
+    optimizer,
+    iteration: int,
+    save_path,
+) -> None:
+    check_point = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'iteration': iteration,
+    }
+    torch.save(check_point, save_path)
+
+
+def load_checkpoint(
+    src, model, optimizer
+):
+    state_dict = torch.load(src)
+    model.load_state_dict(state_dict["model_state_dict"])
+    optimizer.load_state_dict(state_dict["optimizer_state_dict"])
+    iteration = state_dict["iteration"]
+
+    return iteration
 
 
 if __name__ == '__main__':
