@@ -88,7 +88,7 @@ class RMSNorm(nn.Module):
 
 class SwiGLU(nn.Module):
     def __init__(self, d_model: int, d_ff: int = None, device=None, dtype=None):
-        super(GLU, self).__init__()
+        super(SwiGLU, self).__init__()
         if d_ff is None:
             d_hidden = 8 / 3 * d_model
             self.d_ff = (d_hidden + 63) // 64 * 64 # 确保d_ff近似d_hidden的同时又是64的倍数
