@@ -154,7 +154,7 @@ def generate(model, tokenizer, prompt_text, max_new_tokens, context_length, temp
                 probs = torch.softmax(logits_last, dim=-1)
                 next_token = torch.multinomial(probs, num_samples=1)
         else:
-            raise ValueError("temperature must be ≥ 0.0")
+            raise ValueError("Temperature must be ≥ 0.0!")
 
         # 将新的token拼接到input_tensor后面
         input_tensor = torch.cat((input_tensor, next_token), dim=1)
