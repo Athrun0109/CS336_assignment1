@@ -17,6 +17,18 @@ except ImportError:
 from modules import (get_batch, TransformerLM, AdamW, SGD, cross_entropy_loss, gradient_clipping, save_checkpoint, \
                      load_checkpoint, cosine_annealing)
 
+def cal_grad_norm(parameters):
+    """
+    Args:
+        parameters:
+    Returns:
+        L2 grad_norm: float
+    """
+    grads = [p.grad.detach() for p in parameters if p.grad is not None]
+    s = sum(torch.sum(torch.pow(grad, 2)).item() for grad in grads) # 每个grad都是矩阵，先内部求和。
+    norm = s ** 0.5
+    return norm
+
 @torch.no_grad()
 def run_validation(model, dataset, batch_size, context_length, device, num_batches=10):
     total_loss = 0.0
@@ -54,7 +66,7 @@ def main(args):
         d_model=args.d_model,
         num_layers=args.num_layers,
         num_heads=args.num_heads,
-        d_ff=args.dff,
+        d_ff=args.d_ff,
         rope_theta=args.rope_theta,
         device=device,
         dtype=torch.float32
@@ -80,7 +92,8 @@ def main(args):
     print("Starting training...")
     model.train()
 
-    t0 = time.time()
+    start_time = t0 = time.time()
+    train_tokens = args.batch_size * args.context_length
 
     for step in range(start_step, args.max_steps):
         # 6.1 使用cosine_annealing确定学习率
@@ -106,6 +119,9 @@ def main(args):
         # 6.5 反向传播
         optimizer.zero_grad()
         loss.backward() # 计算梯度
+        # 6.5.1 计算grad_norm，用于检查是否出现梯度爆炸的问题
+        grad_norm = cal_grad_norm(model.parameters())
+
         # 6.6 裁剪梯度; model.parameters() -> Tensor: weight, bias, -> Tensor: grad
         gradient_clipping(model.parameters(), args.grad_clip)
         # 6.7 更新参数
@@ -117,21 +133,27 @@ def main(args):
         t0 = t1
         if step % args.log_interval == 0:
             print(f"Step {step}: loss {loss.item():.4f}, lr {lr:.2e}, time {dt:.2f}s")
-
+            throughput = train_tokens / dt
             if args.use_wandb and HAS_WANDB:
                 wandb.log({
                     "train/loss": loss.item(),
                     "train/lr": lr,
-                    "train/step": step
+                    "train/step": step,
+                    "train/token_per_sec": throughput,
+                    "train/time_elapsed": time.time() - start_time,
+                    "train/grad_norm": grad_norm,
                 })
 
         # 8. 验证中间结果
         if step > 0 and step % args.val_interval == 0:
             val_loss = run_validation(model, val_dataset, args.batch_size, args.context_length, device)
             print(f"--- Validation loss at step {step}: {val_loss:.4f} ---")
-
             if args.use_wandb and HAS_WANDB:
-                wandb.log({"val/loss": val_loss, "val/step": step})
+                wandb.log({
+                    "val/loss": val_loss,
+                    "val/step": step,
+                    "val/time_elapsed": time.time() - start_time,
+                })
 
             # 9. 保存检查点
             save_path = os.path.join(args.save_dir, f"checkpoint_{step}.pth")
@@ -147,10 +169,19 @@ if __name__ == '__main__':
     # run_validation()
     parser = argparse.ArgumentParser(description="CS336 Assignment-1 5.3 Training Loop")
     # 数据和权重路径相关
+    def clearfy_true_false(s):
+        if isinstance(s, bool):
+            return s
+        if s.lower() in ("yes", "true", "t", "y", "1"):
+            return True
+        elif s.lower() in ("no", "false", "f", "n", "0"):
+            return False
+        else:
+            raise argparse.ArgumentTypeError("Boolean value expected.")
     parser.add_argument("--train_data_path", type=str, required=True, help="Path to the training data(.npy).")
     parser.add_argument("--val_data_path", type=str, required=True, help="Path to the validation data(.npy).")
-    parser.add_argument("--load_from_checkpoint", type=bool, default=False, help="Whether to load checkpoint.")
-    parser.add_argument("--checkpoint_path", type=str, required=True, help="Path to pretrained checkpoint.")
+    parser.add_argument("--load_from_checkpoint", type=clearfy_true_false, default=True, help="Whether to load checkpoint.")
+    parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to pretrained checkpoint.")
     parser.add_argument("--save_dir", type=str, required=True, help="Dir path to save checkpoint.")
     # 模型超参数
     parser.add_argument("--vocab_size", type=int, required=True, help="Vocabulary size.")
@@ -161,6 +192,7 @@ if __name__ == '__main__':
     parser.add_argument("--d_ff", type=int, default=1024, help="Feed-forward dimension")
     parser.add_argument("--rope_theta", type=float, default=10000.0, help="RoPE theta value")
     # 优化器超参数
+    parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate.")
     parser.add_argument("--max_learning_rate", type=float, default=1e-3, help="Max LR for cosine schedule")
     parser.add_argument("--min_learning_rate", type=float, default=1e-4, help="Min LR (end of training)")
     parser.add_argument("--warmup_steps", type=int, default=100, help="Linear warmup steps")
