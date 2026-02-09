@@ -106,11 +106,11 @@ uv run pytest tests/test_serialization.py::test_checkpointing -q
 
 # train LLM
 ## run for one time
-cs336_basics/data_preprocess.py
+python cs336_basics/data_preprocess.py
 ## train on tiny dataset
-cs336_basics/train.py
+python cs336_basics/train.py
 
 # generating text
-cs336_basics/inference.py
+python cs336_basics/inference.py
 ```
 

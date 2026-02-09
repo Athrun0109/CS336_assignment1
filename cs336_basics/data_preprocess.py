@@ -2,6 +2,7 @@
 只需运行一次；训练BPE Tokenizer并将Text -> IDs
 """
 import os
+import json
 import math
 import argparse
 
@@ -12,6 +13,36 @@ from tqdm import tqdm
 import BPEv02
 
 SPECIAL_TOKENS = [BPEv02.SPECIAL_TOKEN]
+
+
+def save_tokenizer(path, vocab, merges, train_data_path, vocab_size, special_tokens):
+    # 将 BPE 训练结果保存为 JSON（bytes 用 hex 编码）
+    data = {
+        "train_data_path": train_data_path,
+        "vocab_size": vocab_size,
+        "special_tokens": special_tokens,
+        "vocab": {str(k): v.hex() for k, v in vocab.items()},
+        "merges": [[a.hex(), b.hex()] for a, b in merges],
+    }
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"Tokenizer saved to {path}")
+
+
+def load_tokenizer(path):
+    # 从 JSON 加载 BPE 训练结果，返回 (vocab, merges, meta)
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    vocab = {int(k): bytes.fromhex(v) for k, v in data["vocab"].items()}
+    merges = [(bytes.fromhex(a), bytes.fromhex(b)) for a, b in data["merges"]]
+    meta = {
+        "train_data_path": data["train_data_path"],
+        "vocab_size": data["vocab_size"],
+        "special_tokens": data["special_tokens"],
+    }
+    print(f"Tokenizer loaded from {path}")
+    return vocab, merges, meta
+
 
 class BPETokenizer:
     def __init__(self, vocab, merges, patterns):
@@ -103,7 +134,9 @@ if __name__ == "__main__":
     parser.add_argument("--root_path", type=str, default=r'C:\Users\Admin\Documents\Codes\assignment1-basics')
     parser.add_argument("--train_input", type=str, default=r"data\TinyStoriesV2-GPT4-train.txt")
     parser.add_argument("--val_input", type=str, default=r"data\TinyStoriesV2-GPT4-valid.txt")
-    parser.add_argument("--vocab_size", type=int, default=10000)  # 注意这里的 vocab_size
+    parser.add_argument("--vocab_size", type=int, default=10000)
+    parser.add_argument("--tokenizer_path", type=str, default=None,
+                        help="Path to tokenizer JSON. If exists and params match, skip BPE training.")
     args = parser.parse_args()
 
     train_output_path = os.path.join(args.root_path, r"data\train.npy")
@@ -112,9 +145,26 @@ if __name__ == "__main__":
     train_data_path = os.path.join(args.root_path, args.train_input)
     val_data_path = os.path.join(args.root_path, args.val_input)
 
-    # 1. 训练 BPE (通常只需在训练集上训练)
-    print(f"Training BPE vocab (size={args.vocab_size})...")
-    vocab, merges = BPEv02.train_bpe(train_data_path, args.vocab_size, [BPEv02.SPECIAL_TOKEN])
+    # 默认 tokenizer 保存路径
+    tokenizer_path = args.tokenizer_path or os.path.join(args.root_path, "data", "tokenizer.json")
+
+    # 1. 训练 BPE 或从缓存加载
+    loaded = False
+    if os.path.exists(tokenizer_path):
+        vocab, merges, meta = load_tokenizer(tokenizer_path)
+        # 校验关键参数是否匹配
+        if (meta["train_data_path"] == train_data_path
+                and meta["vocab_size"] == args.vocab_size
+                and meta["special_tokens"] == SPECIAL_TOKENS):
+            print("Tokenizer params match, skipping BPE training.")
+            loaded = True
+        else:
+            print("Tokenizer params mismatch, re-training...")
+
+    if not loaded:
+        print(f"Training BPE vocab (size={args.vocab_size})...")
+        vocab, merges = BPEv02.train_bpe(train_data_path, args.vocab_size, SPECIAL_TOKENS)
+        save_tokenizer(tokenizer_path, vocab, merges, train_data_path, args.vocab_size, SPECIAL_TOKENS)
 
     tokenizer = BPETokenizer(vocab, merges, BPEv02.PAT)
 
