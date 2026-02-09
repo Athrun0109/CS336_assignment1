@@ -102,12 +102,15 @@ uv run pytest tests/test_data.py::test_get_batch -q
 # test checkpointing
 uv run pytest tests/test_serialization.py::test_checkpointing -q
 
-# ================== Put everything together ==================
+# =================== Put everything together ===================
 
 # train LLM
+## run for one time
+cs336_basics/data_preprocess.py
+## train on tiny dataset
 cs336_basics/train.py
 
-# Generating text
+# generating text
 cs336_basics/inference.py
 ```
 

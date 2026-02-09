@@ -9,6 +9,7 @@ from typing import List, Tuple, Dict, BinaryIO
 from collections import defaultdict
 import regex as re
 from multiprocessing import Pool
+from tqdm import tqdm
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 SPECIAL_TOKEN = "<|endoftext|>"
@@ -40,6 +41,11 @@ def find_chunk_boundaries(
     mini_chunk_size = 4096  # Read ahead by 4k bytes at a time
 
     for bi in range(1, len(chunk_boundaries) - 1):
+        # 小改进，去除“越界”情况下的重复遍历问题
+        if chunk_boundaries[bi] <= chunk_boundaries[bi-1]:
+            chunk_boundaries[bi] = chunk_boundaries[bi-1]
+            continue
+            
         initial_position = chunk_boundaries[bi]
         file.seek(initial_position)  # Start at boundary guess
         while True:
@@ -180,7 +186,7 @@ def train_bpe(
 
     # 开始训练BPE
     num_merges = vocab_size - 256 - lst
-    for i in range(num_merges):
+    for i in tqdm(range(num_merges), desc="BPE Training"):
         if not pair_freqs:
             print("No more pairs to merge. Stopping early.")
             break

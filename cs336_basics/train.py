@@ -3,8 +3,8 @@
 '''
 import os
 import time
-
 import argparse
+
 import numpy as np
 import torch
 
@@ -210,7 +210,25 @@ if __name__ == '__main__':
     parser.add_argument("--wandb_project", type=str, default="cs336-lm", help="WandB project name")
     parser.add_argument("--run_name", type=str, default=None, help="WandB run name")
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
+
+    # manually input parameters
+    args_list = [
+        "--train_data_path", "data/train.npy",
+        "--val_data_path", "data/val.npy",
+        "--save_dir", "checkpoints/run1",
+        "--vocab_size", "10000",  # 对应 int
+        "--context_length", "256",
+        "--d_model", "512",
+        "--d_ff", "1344",
+        "--rope_theta", "10000",
+        "--num_layers", "4",
+        "--num_heads", "16",
+        "--max_steps", "100",
+        "--batch_size", "8",
+        "--use_wandb"  # action="store_true" 的开关，后面不接值
+    ]
+    args = parser.parse_args(args_list)
 
     main(args)
 
