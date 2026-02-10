@@ -214,9 +214,9 @@ if __name__ == '__main__':
 
     # manually input parameters
     args_list = [
-        "--train_data_path", "data/train.npy",
-        "--val_data_path", "data/val.npy",
-        "--save_dir", "checkpoints/run1",
+        "--train_data_path", r"C:\Users\Admin\Documents\Codes\assignment1-basics\data\train.npy",
+        "--val_data_path", r"C:\Users\Admin\Documents\Codes\assignment1-basics\data\val.npy",
+        "--save_dir", r"C:\Users\Admin\Documents\Codes\assignment1-basics\checkpoints",
         "--vocab_size", "10000",  # 对应 int
         "--context_length", "256",
         "--d_model", "512",
@@ -224,16 +224,26 @@ if __name__ == '__main__':
         "--rope_theta", "10000",
         "--num_layers", "4",
         "--num_heads", "16",
-        "--max_steps", "100",
-        "--batch_size", "8",
+        "--max_steps", "5000",
+        "--batch_size", "256",
         "--use_wandb"  # action="store_true" 的开关，后面不接值
     ]
     args = parser.parse_args(args_list)
 
-    main(args)
+    # 尝试不同学习率测试训练效果
+    lr_candidates = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2]
+    base_save_dir = args.save_dir
+    for lr in lr_candidates:
+        args.max_learning_rate = lr
+        args.min_learning_rate = lr / 10
+        args.cosine_cycle_iters = args.max_steps
+        args.run_name = f"run_lr_{lr}"
+        args.save_dir = os.path.join(base_save_dir, args.run_name)
 
-    print('OK!')
+        print(f"Training with learning rate: {lr}...")
+        main(args)
 
+    print("Training finished.")
 
 """
 How to train:

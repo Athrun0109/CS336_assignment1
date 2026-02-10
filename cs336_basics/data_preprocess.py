@@ -172,11 +172,11 @@ if __name__ == "__main__":
     print(f"Processing {train_data_path}...")
     train_token_IDs = tokenizer.encode(train_data_path, desc="Encoding train")
     # 使用 uint16 节省空间 (前提是 vocab_size < 65536)
-    np.save(train_output_path, np.array(train_token_IDs, dtype=np.uint16))
+    np.save(train_output_path, np.array(train_token_IDs, dtype=np.int64))
     print(f"Saved to {train_output_path}")
 
     # 3. 处理并保存验证集
     print(f"Processing {val_data_path}...")
     val_token_IDs = tokenizer.encode(val_data_path, desc="Encoding val")
-    np.save(val_output_path, np.array(val_token_IDs, dtype=np.uint16))
+    np.save(val_output_path, np.array(val_token_IDs, dtype=np.int64))
     print(f"Saved to {val_output_path}")

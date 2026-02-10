@@ -303,10 +303,11 @@ def cross_entropy_loss(inputs: torch.Tensor, targets: torch.Tensor) -> torch.Ten
     下面s-o来自CE对数分子 - 分母形成的。
     """
     x = inputs - inputs.max(dim=-1, keepdim=True)[0]
-    # 根据targets从logits中取出对应位置的logit
-    o = torch.gather(x, dim=-1, index=targets.unsqueeze(dim=-1))
-    s = torch.logsumexp(x, dim=-1)
-    loss = (s - o).mean()
+    # 根据targets从logits中取出对应位置的logit，gather()要求input与index维度必须相同
+    o = torch.gather(x, dim=-1, index=targets.unsqueeze(dim=-1)) # shape=(b, context_len, 1)
+    o = o.squeeze(dim=-1) # 重要！将shape变回(b, context_len)
+    s = torch.logsumexp(x, dim=-1) # shape=(b, context_len)
+    loss = (s - o).mean() # 这里的减法来自log(a/b) = log(a) - log(b)
     return loss
 
 
