@@ -116,15 +116,20 @@ def main(args):
         logits = model(inputs)
         loss = cross_entropy_loss(logits, targets)
 
-        # 6.5 反向传播
+        # 6.5 加入梯度消失或者梯度爆炸就停止训练的机制
+        if torch.isnan(loss) or torch.isinf(loss) or loss.item() > 15:
+            print(f"Divergence detected at step {step}, loss = {loss.item()}, stopping...")
+            break
+
+        # 6.6 反向传播
         optimizer.zero_grad()
         loss.backward() # 计算梯度
-        # 6.5.1 计算grad_norm，用于检查是否出现梯度爆炸的问题
+        # 6.6.1 计算grad_norm，用于检查是否出现梯度爆炸的问题
         grad_norm = cal_grad_norm(model.parameters())
 
-        # 6.6 裁剪梯度; model.parameters() -> Tensor: weight, bias, -> Tensor: grad
+        # 6.7 裁剪梯度; model.parameters() -> Tensor: weight, bias, -> Tensor: grad
         gradient_clipping(model.parameters(), args.grad_clip)
-        # 6.7 更新参数
+        # 6.8 更新参数
         optimizer.step()
 
         # 7. 日志记录
@@ -224,7 +229,7 @@ if __name__ == '__main__':
         "--rope_theta", "10000",
         "--num_layers", "4",
         "--num_heads", "16",
-        "--max_steps", "5000",
+        "--max_steps", "2000",
         "--batch_size", "256",
         "--use_wandb"  # action="store_true" 的开关，后面不接值
     ]
@@ -243,7 +248,7 @@ if __name__ == '__main__':
         print(f"Training with learning rate: {lr}...")
         main(args)
 
-    print("Training finished.")
+    print("Program finished successfully.")
 
 """
 How to train:
