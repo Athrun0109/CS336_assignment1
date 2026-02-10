@@ -48,9 +48,10 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
-### Memo
 
-Windows系统下，测试代码使用以下命令
+
+## Answer (coding part)
+### Windows OS
 
 ```sh
 # test Linear
