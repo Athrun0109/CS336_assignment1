@@ -119,4 +119,4 @@ python cs336_basics/inference.py
 
 ### 7.2 TinyStories - Tune the learning rate
 
-<img src="wandb/Tune the learning rate.png" alt="Tune the learning rate" style="zoom: 80%;" />
+<img src="Tune the learning rate.png" alt="Tune the learning rate" style="zoom: 80%;" />
