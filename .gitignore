@@ -164,3 +164,6 @@ cython_debug/
 data/
 checkpoints/
 wandb/
+
+# Claude
+CLAUDE.md
