@@ -53,12 +53,12 @@ cd ..
 ## Answer (coding part)
 ### 2 Byte-Pair Encoding (BPE) Tokenizer
 
--  [BPEv01.py](cs336_basics\BPEv01.py) 
--  [BPEv02.py](cs336_basics\BPEv02.py) 
+-  [BPEv01.py](cs336_basics/BPEv01.py) 
+-  [BPEv02.py](cs336_basics/BPEv02.py) 
 
 ### 3 Transformer Language Model Architecture & 4 Training a Transformer LM
 
--  [modules.py](cs336_basics\modules.py) 
+-  [modules.py](cs336_basics/modules.py) 
 
 **Test script:**
 
@@ -119,11 +119,11 @@ uv run pytest tests/test_serialization.py::test_checkpointing -q
 
 ### 5 Training loop
 
--  [train.py](cs336_basics\train.py) 
+-  [train.py](cs336_basics/train.py) 
 
 ### 6 Generating text
 
--  [inference.py](cs336_basics\inference.py) 
+-  [inference.py](cs336_basics/inference.py) 
 
 ### 7.2 TinyStories - Tune the learning rate
 
@@ -140,3 +140,4 @@ python cs336_basics/inference.py
 ```
 
 <img src="Tune the learning rate.png" alt="Tune the learning rate" style="zoom: 80%;" />
+
